@@ -1,0 +1,80 @@
+-- Table summary 
+SELECT cwe_id,created_at, modified_at
+FROM  `daproject2.cve_dataset.OSSVulnerabilities`
+WHERE created_at >= '2023-01-01 00:00:00';
+
+-- Find all the vulnerabilities from March 5th 2023 to January 1st 2023 = 4450
+-- 4450 Without nulls, WITH NoInfo and Others
+
+SELECT cwe_id, DATE(created_at)
+FROM `daproject2.cve_dataset.OSSVulnerabilities`
+WHERE created_at >= '2023-01-01 00:00:00' AND cwe_id IS NOT NULL
+ORDER BY created_at DESC;
+
+-- Total vulnerabilties in this time period - 4450 without nulls (Includes Other and No Info)
+
+SELECT DATE(created_at), cwe_id
+FROM `daproject2.cve_dataset.OSSVulnerabilities`
+WHERE created_at >= '2023-01-01 00:00:00'AND cwe_id IS NOT NULL;
+
+-- Total vulnerabilties in this time period - 3874 without nulls/ Other /No Info)
+
+SELECT DATE(created_at), cwe_id
+FROM `daproject2.cve_dataset.OSSVulnerabilities`
+WHERE created_at >= '2023-01-01 00:00:00'AND cwe_id IS NOT NULL AND (cwe_id != 'NVD-CWE-Other') AND (cwe_id != 'NVD-CWE-noinfo');
+
+-- Number of distinct vulnerabilties found in this time period - 174 distinct CWEs 
+-- WITHOUT NVD-CWE-Other / NVD-CWE-noinfo	/nulls
+
+SELECT DISTINCT cwe_id
+FROM `daproject2.cve_dataset.OSSVulnerabilities`
+WHERE created_at >= '2023-01-01 00:00:00' AND cwe_id IS NOT NULL AND (cwe_id != 'NVD-CWE-Other') AND (cwe_id != 'NVD-CWE-noinfo');
+
+-- HOW MANY OF EACH CWE WE HAVE ON THIS LIST
+
+SELECT cwe_id, COUNT (cve_id)
+FROM `daproject2.cve_dataset.OSSVulnerabilities`
+WHERE created_at >= '2023-01-01 00:00:00' AND cwe_id IS NOT NULL AND (cwe_id != 'NVD-CWE-Other') AND (cwe_id != 'NVD-CWE-noinfo')
+GROUP BY cwe_id;
+
+-- Top 10 worse CWE - 787/79/89/20/125/78/416/22/352/434 TOTAL = 2161
+
+SELECT COUNT (cwe_id)
+FROM `daproject2.cve_dataset.OSSVulnerabilities`
+WHERE created_at >= '2023-01-01 00:00:00' AND (cwe_id IN ('CWE-787', 'CWE-79', 'CWE-89','CWE-20','CWE-125','CWE-78','CWE-416','CWE-22','CWE-352','CWE-434'));
+
+-- All the other CEW excluding the top 10 TOTAL = 1818
+SELECT COUNT (cwe_id)
+FROM `daproject2.cve_dataset.OSSVulnerabilities`
+WHERE created_at >= '2023-01-01 00:00:00' AND (cwe_id NOT IN ('CWE-787', 'CWE-79', 'CWE-89','CWE-20','CWE-125','CWE-78','CWE-416','CWE-22','CWE-352','CWE-434')) AND cwe_id IS NOT NULL AND (cwe_id != 'NVD-CWE-Other') AND (cwe_id != 'NVD-CWE-noinfo');
+
+-- Calcuclate the difference in dates from origin to resolution per CWE
+
+SELECT cwe_id, DATE(created_at) AS new_created_at, DATE(modified_at) AS new_modified_at, DATE_DIFF(modified_at, created_at, day) AS day_difference
+FROM `daproject2.cve_dataset.OSSVulnerabilities`
+WHERE created_at >= '2023-01-01 00:00:00' AND cwe_id IS NOT NULL AND (cwe_id != 'NVD-CWE-Other') AND (cwe_id != 'NVD-CWE-noinfo')
+GROUP BY cwe_id, modified_at, created_at
+ORDER BY day_difference DESC;
+
+-- CALCULATIONS FOR EACH CWE (MIN,MAX, AVG, TOTAL, AVG OF TOTAL)
+
+SELECT cwe_id,
+  COUNT(*) AS instances,
+  MAX(new_created_at) AS new_created_at,
+  MAX(new_modified_at) AS new_modified_at,
+  MAX(day_difference) AS max_day_difference,
+  MIN(day_difference) AS min_day_difference,
+  SUM(day_difference) AS total_day_difference,
+  ROUND(SUM(day_difference) / COUNT(*)) AS average_day_difference
+FROM (
+  SELECT cwe_id,
+    DATE(created_at) AS new_created_at,
+    DATE(DATETIME_TRUNC(modified_at, DAY)) AS new_modified_at,
+    DATE_DIFF(DATETIME_TRUNC(modified_at, DAY), DATETIME_TRUNC(created_at, DAY), DAY) AS day_difference,
+    SUM(DATE_DIFF(DATETIME_TRUNC(modified_at, DAY), DATETIME_TRUNC(created_at, DAY), DAY)) OVER (PARTITION BY cwe_id) AS sum_day_difference
+  FROM `daproject2.cve_dataset.OSSVulnerabilities`
+  WHERE created_at >= '2023-01-01 00:00:00'
+    AND cwe_id IS NOT NULL AND cwe_id != 'NVD-CWE-Other' AND cwe_id != 'NVD-CWE-noinfo'
+) subquery
+GROUP BY cwe_id
+ORDER BY average_day_difference DESC;
